@@ -1,0 +1,25 @@
+---
+
+- hosts: docker_hosts
+  become: true
+  roles:
+    - geerlingguy.pip
+    - geerlingguy.docker
+  tasks:
+    - name: Add service group
+      ansible.builtin.group:
+        name: service
+        gid: 10000
+    - name: Add service user
+      ansible.builtin.user:
+        name: service
+        password: "{{ service_user_pass | password_hash('sha512') }}"
+        uid: 10000
+        group: service
+        shell: '/bin/bash'
+        update_password: on_create
+    - name: Ensure Docker socket permission for service user
+      ansible.builtin.file:
+        path: /var/run/docker.sock
+        owner: root
+        group: 10000

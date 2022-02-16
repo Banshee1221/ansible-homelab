@@ -1,0 +1,12 @@
+[all:vars]
+ansible_become_user=root
+ansible_become_method=su
+ansible_become_flags="-l"
+ansible_user=edebeste
+ansible_become_pass='{{ root_pass }}'
+
+[docker_hosts]
+sierra
+
+[docker_services_host]
+sierra

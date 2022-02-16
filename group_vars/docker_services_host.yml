@@ -1,0 +1,22 @@
+---
+
+docker_service_user: service
+docker_common_network: reverse-proxy
+
+docker_services: {
+    'lsio-swag': {
+      'env_file': False 
+    },
+    'tandoor': {
+      'env_file': True
+    },
+    'watchtower': {
+      'env_file': False
+    },
+    'hauk': {
+      'env_file': False
+    },
+    'signal-cli': {
+      'env_file': False
+    }
+  }

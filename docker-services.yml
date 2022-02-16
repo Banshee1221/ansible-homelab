@@ -1,0 +1,102 @@
+---
+
+
+# - name: Include docker playbook
+#   import_playbook: docker.yml
+
+- hosts: docker_services_host
+  tasks:
+    - name: Install dependencies
+      become: True
+      ansible.builtin.package:
+        name: git
+        state: present
+
+
+- hosts: docker_services_host
+  vars:
+       ansible_user:  "{{ docker_service_user }}"
+       ansible_ssh_pass: "{{ service_user_pass }}"
+  tasks:
+    - name: Ensure common docker folder
+      ansible.builtin.file:
+        path: ~/docker
+        owner: "{{ docker_service_user }}"
+        group: "{{ docker_service_user }}"
+        state: directory
+
+    - name: Fetch Docker-compose git repository
+      ansible.builtin.git:
+        repo: https://github.com/Banshee1221/docker-homelab.git
+        dest: ~/docker
+
+    - name: Create common docker network
+      community.docker.docker_network:
+        name: "{{ docker_common_network }}"
+
+    - name: Template environment files
+      become: true
+      template:
+        src: "{{ lookup('fileglob', playbook_dir + '/files/' + item + '/.*') }}"
+        dest: "/home/{{docker_service_user}}/docker/{{ item }}/.env"
+      loop: "{{ docker_services.keys() }}"
+      when: docker_services[item].env_file
+
+    - name: Bootstrap containers
+      community.docker.docker_compose:
+        project_src: "~/docker/{{ item }}"
+        build: no
+      loop: "{{ docker_services.keys() }}"
+      notify:
+        - restart container
+    
+    - name: Flush handlers
+      meta: flush_handlers
+
+    - name: Copy over configs recursively
+      become: true
+      template:
+        src: "{{ playbook_dir}}/files/{{ item.path }}"
+        dest: "/home/{{ docker_service_user }}/docker/{{ item.path }}"
+      with_community.general.filetree: "{{ playbook_dir }}/files/"
+      when: item.state == 'file'
+      register: configs_changed
+
+    - set_fact:
+        list_to_restart: "{{ configs_changed.results | 
+          json_query(q1) | 
+          map(attribute='item') | 
+          map(attribute='path') |  map('regex_replace', '\/(.*)', '') }}"
+      vars:
+        q1: '[?changed==`true`]'
+
+    - name: Final start containers
+      community.docker.docker_compose:
+        project_src: "~/docker/{{ item }}"
+        build: no
+        restarted: true
+        state: present
+      loop: "{{ docker_services.keys() }}"
+      when: item in list_to_restart
+      register: final_run
+
+    - name: Create RC file
+      file:
+        path: "~/docker/{{ item['item'] }}/.complete"
+        state: touch
+        access_time: preserve
+        modification_time: preserve
+      loop: "{{ final_run.results }}"
+      when: (not item.failed | default(False))
+
+  handlers:
+    - name: restart container
+      pause:
+        seconds: 90
+  
+
+    # - name: Deploy SWAG
+      
+
+
+    
